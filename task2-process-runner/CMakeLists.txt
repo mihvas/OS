@@ -5,8 +5,14 @@ project(ProcessRunner)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(WIN32)
+    set(PROCESS_SOURCE src/process_windows.cpp)
+else()
+    set(PROCESS_SOURCE src/process_linux.cpp)
+endif()
+
 add_library(process_runner STATIC
-    src/process_runner.cpp
+    ${PROCESS_SOURCE}
 )
 
 target_include_directories(process_runner PUBLIC

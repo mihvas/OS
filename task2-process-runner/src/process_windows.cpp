@@ -2,8 +2,6 @@
 
 #include <string>
 
-#ifdef _WIN32
-
 static std::string quote_argument(const std::string& argument) {
     std::string result = "\"";
     int backslashes = 0;
@@ -100,96 +98,3 @@ bool kill_process(ProcessId process) {
 
     return TerminateProcess(process, 1) != 0;
 }
-
-#else
-
-
-#include <cerrno>
-#include <csignal>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-ProcessId start_process(
-    const std::string& program,
-    const std::vector<std::string>& arguments
-) {
-    pid_t pid = fork();
-
-    if (pid < 0) {
-        return -1;
-    }
-
-    if (pid == 0) {
-        std::vector<char*> argv;
-
-        argv.push_back(const_cast<char*>(program.c_str()));
-
-        for (const std::string& argument : arguments) {
-            argv.push_back(const_cast<char*>(argument.c_str()));
-        }
-
-        argv.push_back(nullptr);
-
-        execvp(program.c_str(), argv.data());
-
-        _exit(127);
-    }
-
-    return pid;
-}
-
-int wait_process(ProcessId process) {
-    if (process <= 0) {
-        return -1;
-    }
-
-    int status;
-
-    while (waitpid(process, &status, 0) < 0) {
-        if (errno == EINTR) {
-            continue;
-        }
-
-        return -1;
-    }
-
-    if (WIFEXITED(status)) {
-        return WEXITSTATUS(status);
-    }
-
-    if (WIFSIGNALED(status)) {
-        return 128 + WTERMSIG(status);
-    }
-
-    return -1;
-}
-
-bool is_process_running(ProcessId process) {
-    if (process <= 0) {
-        return false;
-    }
-
-    siginfo_t info = {};
-
-    if (waitid(
-        P_PID,
-        static_cast<id_t>(process),
-        &info,
-        WEXITED | WNOHANG | WNOWAIT
-    ) < 0) {
-        return false;
-    }
-
-    return info.si_pid == 0;
-}
-
-bool kill_process(ProcessId process) {
-    if (process <= 0) {
-        return false;
-    }
-
-    return kill(process, SIGKILL) == 0;
-}
-
-#endif
