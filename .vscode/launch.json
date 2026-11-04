@@ -2,18 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug HelloWorld",
+            "name": "Task 1 - HelloWorld",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/HelloWorld.exe",
+            "program": "${workspaceFolder}/task1-helloworld/build/HelloWorld.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/task1-helloworld",
             "externalConsole": true,
             "MIMode": "gdb",
             "miDebuggerPath": "C:/Users/misha/gcc/bin/gdb.exe",
             "linux": {
-                "program": "${workspaceFolder}/build/HelloWorld",
+                "program": "${workspaceFolder}/task1-helloworld/build/HelloWorld",
                 "externalConsole": false,
                 "miDebuggerPath": "/usr/bin/gdb"
             }
