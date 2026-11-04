@@ -7,9 +7,9 @@
 
 int main() {
 #ifdef _WIN32
-    const std::string childProgram = "child.exe";
+    const std::string childProgram = "build/child.exe";
 #else
-    const std::string childProgram = "./child";
+    const std::string childProgram = "./build/child";
 #endif
 
     ProcessId process;
