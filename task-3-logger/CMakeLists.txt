@@ -1,35 +1,26 @@
-cmake_minimum_required(VERSION 3.10)
 
-project(ProcessRunner)
+cmake_minimum_required(VERSION 3.16)
+
+project(ProcessCounter)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(WIN32)
-    set(PROCESS_SOURCE src/process_windows.cpp)
-else()
-    set(PROCESS_SOURCE src/process_linux.cpp)
-endif()
+find_package(Threads REQUIRED)
 
-add_library(process_runner STATIC
-    ${PROCESS_SOURCE}
+include_directories(includes)
+
+add_executable(main
+    src/main.cpp
 )
 
-target_include_directories(process_runner PUBLIC
-    include
+add_executable(worker
+    src/worker.cpp
 )
 
-add_executable(process_test
-    tests/main.cpp
-)
+target_link_libraries(main PRIVATE Threads::Threads)
+target_link_libraries(worker PRIVATE Threads::Threads)
 
-target_link_libraries(process_test PRIVATE
-    process_runner
-)
-
-add_executable(child
-    tests/child.cpp
-)
 
 # cmake -S . -B build -G "MinGW Makefiles"
 # cmake --build build
