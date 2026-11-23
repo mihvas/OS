@@ -181,7 +181,19 @@ int main()
 
     std::string input;
 
-    while (True)
+    if (flock(lock_fd, LOCK_EX | LOCK_NB) == 0)
+    {
+        coordinator = true;
+
+        set_counter(0);
+
+        write_log("PID=" + std::to_string(pid) +
+                " Became coordinator");
+
+        std::cout << "This process is coordinator.\n";
+    }
+
+    while (true)
     {
         auto now = Clock::now();
 
@@ -190,6 +202,10 @@ int main()
             if (flock(lock_fd, LOCK_EX | LOCK_NB) == 0)
             {
                 coordinator = true;
+                
+                next_increment = Clock::now();
+                next_log = Clock::now() + std::chrono::seconds(1);
+                next_spawn = Clock::now() + std::chrono::seconds(3);
 
                 write_log("PID=" + std::to_string(pid) +
                           " Became coordinator");

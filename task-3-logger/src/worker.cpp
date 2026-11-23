@@ -3,8 +3,7 @@
 #include <chrono>
 
 #include "common.h"
-#include "logger.h"
-#include "shared_counter.h"
+
 
 int main(int argc, char* argv[])
 {
@@ -21,7 +20,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    pid_t pid = get_pid();
+    pid_t pid = getpid();
 
     write_log("PID=" + std::to_string(pid) +
               " " + worker_type + " START");
