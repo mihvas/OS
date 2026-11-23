@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -9,14 +8,14 @@
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    if (argc != 4)
     {
         return 1;
     }
 
     std::string worker_type = argv[1];
 
-    if (!init_shared_counter())
+    if (!init_shared_counter(argv[2], argv[3]))
     {
         std::cerr << "Failed to connect to shared counter.\n";
         return 1;

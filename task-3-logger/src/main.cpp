@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -10,10 +9,9 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <cstdlib>
 
 #include "common.h"
-#include "logger.h"
-#include "shared_counter.h"
 
 using Clock = std::chrono::steady_clock;
 
@@ -21,20 +19,63 @@ pid_t worker1_pid = -1;
 pid_t worker2_pid = -1;
 
 std::string worker_path;
+std::string shm_name;
+std::string sem_name;
+std::string lock_path;
 
-// Проверка завершения процесса
+std::string get_executable_path()
+{
+    char path[4096];
+
+    ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1);
+
+    if (length == -1)
+        return "";
+
+    path[length] = '\0';
+
+    return path;
+}
+
+bool init_paths()
+{
+    std::string executable_path = get_executable_path();
+
+    if (executable_path.empty())
+        return false;
+
+    std::filesystem::path executable(executable_path);
+    std::filesystem::path directory = executable.parent_path();
+
+    worker_path = (directory / "worker").string();
+
+    LOG_FILE = (directory / "process.log").string();
+    lock_path = (directory / "process.lock").string();
+
+    std::string directory_name = directory.string();
+
+    for (char& c : directory_name)
+    {
+        if (c == '/')
+            c = '_';
+    }
+
+    shm_name = "/process_counter_shm_" + directory_name;
+    sem_name = "/process_counter_sem_" + directory_name;
+
+    return true;
+}
+
 bool process_finished(pid_t& pid)
 {
     if (pid <= 0)
-    {
         return true;
-    }
 
     int status;
 
     pid_t result = waitpid(pid, &status, WNOHANG);
 
-    if (result == pid)
+    if (result == pid || (result == -1))
     {
         pid = -1;
         return true;
@@ -43,7 +84,6 @@ bool process_finished(pid_t& pid)
     return false;
 }
 
-// Запуск worker
 pid_t start_worker(const std::string& type)
 {
     pid_t pid = fork();
@@ -56,19 +96,21 @@ pid_t start_worker(const std::string& type)
 
     if (pid == 0)
     {
-        execl(worker_path.c_str(),
-              worker_path.c_str(),
-              type.c_str(),
-              nullptr);
+        execl(
+            worker_path.c_str(),
+            worker_path.c_str(),
+            type.c_str(),
+            shm_name.c_str(),
+            sem_name.c_str(),
+            nullptr
+        );
 
-        // Если exec не удался
         _exit(127);
     }
 
     return pid;
 }
 
-// Проверка, завершились ли оба работника
 bool workers_finished()
 {
     bool first_finished = process_finished(worker1_pid);
@@ -77,69 +119,48 @@ bool workers_finished()
     return first_finished && second_finished;
 }
 
-// Обработка пользовательской команды
 void process_command(const std::string& command)
 {
-    if (command == "show")
+    try
     {
-        std::cout << "Counter: " << get_counter() << '\n';
-    }
-    else if (command == "quit")
-    {
-        std::cout << "Use Ctrl+C to stop the program.\n";
-    }
-    else if (command.rfind("set ", 0) == 0)
-    {
-        try
-        {
-            int value = std::stoi(command.substr(4));
+        size_t position = 0;
 
-            set_counter(value);
+        int value = std::stoi(command, &position);
 
-            std::cout << "Counter set to " << value << '\n';
-        }
-        catch (...)
+        if (position != command.size())
         {
             std::cout << "Invalid number.\n";
+            return;
         }
+
+        set_counter(value);
+
+        std::cout << "Counter set to " << get_counter() << '\n';
+
+        write_log("Counter manually changed to " +
+                  std::to_string(value));
     }
-    else
+    catch (...)
     {
-        std::cout << "Unknown command.\n";
+        std::cout << "Invalid number.\n";
     }
-}
-
-// Получение пути до worker рядом с main
-std::string get_worker_path()
-{
-    char path[4096];
-
-    ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1);
-
-    if (length == -1)
-    {
-        return "./worker";
-    }
-
-    path[length] = '\0';
-
-    std::filesystem::path executable(path);
-
-    return (executable.parent_path() / "worker").string();
 }
 
 int main()
 {
-    if (!init_shared_counter())
+    if (!init_paths())
+    {
+        std::cerr << "Failed to determine executable path.\n";
+        return 1;
+    }
+
+    if (!init_shared_counter(shm_name, sem_name))
     {
         std::cerr << "Failed to initialize shared counter.\n";
         return 1;
     }
 
-    worker_path = get_worker_path();
-
-    // Блокировка для выбора координатора
-    int lock_fd = open(LOCK_FILE, O_CREAT | O_RDWR, 0666);
+    int lock_fd = open(lock_path.c_str(), O_CREAT | O_RDWR, 0666);
 
     if (lock_fd == -1)
     {
@@ -148,52 +169,42 @@ int main()
         return 1;
     }
 
-    bool coordinator = (flock(lock_fd, LOCK_EX | LOCK_NB) == 0);
+    pid_t pid = getpid();
 
-    pid_t pid = get_pid();
-
-    write_log("PID=" + std::to_string(pid) +
-              " MAIN START");
-
-    if (coordinator)
-    {
-        write_log("PID=" + std::to_string(pid) +
-                  " BECAME COORDINATOR");
-
-        std::cout << "This process is coordinator.\n";
-    }
-    else
-    {
-        std::cout << "This process is client.\n";
-    }
-
-    std::cout << "Commands:\n";
-    std::cout << "  set <number> - set counter\n";
-    std::cout << "  show         - show counter\n";
-    std::cout << "  quit         - show exit instruction\n";
-    std::cout << "  Ctrl+C       - exit\n\n";
+    std::cout << "Enter a number to change the counter.\n";
 
     auto next_increment = Clock::now();
     auto next_log = Clock::now() + std::chrono::seconds(1);
     auto next_spawn = Clock::now() + std::chrono::seconds(3);
 
+    bool coordinator = false;
+
     std::string input;
 
-    while (true)
+    while (True)
     {
         auto now = Clock::now();
 
-        // Увеличение счётчика раз в 300 мс
+        if (!coordinator)
+        {
+            if (flock(lock_fd, LOCK_EX | LOCK_NB) == 0)
+            {
+                coordinator = true;
+
+                write_log("PID=" + std::to_string(pid) +
+                          " Became coordinator");
+
+                std::cout << "This process is coordinator.\n";
+            }
+        }
+
         if (now >= next_increment)
         {
             increment_counter(1);
 
-            next_increment += std::chrono::milliseconds(
-                COUNTER_INTERVAL_MS
-            );
+            next_increment += std::chrono::milliseconds(COUNTER_INTERVAL_MS);
         }
 
-        // Ежесекундное логирование только координатором
         if (coordinator && now >= next_log)
         {
             write_log("PID=" + std::to_string(pid) +
@@ -202,7 +213,6 @@ int main()
             next_log += std::chrono::milliseconds(LOG_INTERVAL_MS);
         }
 
-        // Запуск работников каждые 3 секунды только координатором
         if (coordinator && now >= next_spawn)
         {
             if (workers_finished())
@@ -211,35 +221,17 @@ int main()
                 worker2_pid = start_worker("worker2");
 
                 write_log("PID=" + std::to_string(pid) +
-                          " STARTED WORKERS");
-
-                std::cout << "Workers started.\n";
+                          " Started workers");
             }
             else
             {
                 write_log("PID=" + std::to_string(pid) +
-                          " WORKERS STILL RUNNING. SKIP");
-
-                std::cout << "Previous workers still running. Skipping.\n";
+                          " Workers still running.");
             }
 
-            next_spawn += std::chrono::milliseconds(
-                SPAWN_INTERVAL_MS
-            );
+            next_spawn += std::chrono::milliseconds(SPAWN_INTERVAL_MS);
         }
 
-        // Если координатор потерял блокировку, он больше не координатор
-        if (coordinator)
-        {
-            if (flock(lock_fd, LOCK_EX | LOCK_NB) != 0)
-            {
-                coordinator = false;
-                write_log("PID=" + std::to_string(pid) +
-                          " LOST COORDINATOR");
-            }
-        }
-
-        // Проверка консольного ввода без блокировки таймеров
         pollfd pfd{};
 
         pfd.fd = STDIN_FILENO;
@@ -250,38 +242,34 @@ int main()
         if (result > 0 && (pfd.revents & POLLIN))
         {
             if (!std::getline(std::cin, input))
-            {
                 break;
-            }
 
             process_command(input);
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    // Завершаем оставшихся работников
+    write_log("PID=" + std::to_string(pid) +
+              "Coordinator shutdown");
+
     if (worker1_pid > 0)
     {
         kill(worker1_pid, SIGTERM);
         waitpid(worker1_pid, nullptr, 0);
+        worker1_pid = -1;
     }
 
     if (worker2_pid > 0)
     {
         kill(worker2_pid, SIGTERM);
         waitpid(worker2_pid, nullptr, 0);
+        worker2_pid = -1;
     }
-
-    write_log("PID=" + std::to_string(pid) +
-              " MAIN EXIT");
 
     if (coordinator)
-    {
         flock(lock_fd, LOCK_UN);
-    }
 
     close(lock_fd);
+
     close_shared_counter();
 
     return 0;
