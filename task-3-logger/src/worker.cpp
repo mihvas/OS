@@ -7,12 +7,14 @@
 
 int main(int argc, char* argv[])
 {
-    if (argc != 4)
+    if (argc != 5)
     {
         return 1;
     }
 
     std::string worker_type = argv[1];
+
+    LOG_FILE = argv[4];
 
     if (!init_shared_counter(argv[2], argv[3]))
     {

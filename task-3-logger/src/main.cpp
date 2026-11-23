@@ -102,6 +102,7 @@ pid_t start_worker(const std::string& type)
             type.c_str(),
             shm_name.c_str(),
             sem_name.c_str(),
+            LOG_FILE.c_str(),
             nullptr
         );
 
