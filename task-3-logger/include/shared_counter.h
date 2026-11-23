@@ -21,7 +21,6 @@ inline sem_t* counter_semaphore = SEM_FAILED;
 
 inline bool init_shared_counter()
 {
-    // Сначала открываем семафор, который защищает общие данные
     counter_semaphore = sem_open(SEM_NAME, O_CREAT, 0666, 1);
 
     if (counter_semaphore == SEM_FAILED)
@@ -29,7 +28,6 @@ inline bool init_shared_counter()
         return false;
     }
 
-    // Захватываем семафор во время инициализации
     sem_wait(counter_semaphore);
 
     bool created = false;
@@ -86,7 +84,6 @@ inline bool init_shared_counter()
         return false;
     }
 
-    // Инициализируем счётчик только при создании общей памяти
     if (created)
     {
         shared_data->counter = 0;
