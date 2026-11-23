@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
     }
 
     write_log("PID=" + std::to_string(pid) +
-              " " + worker_type + " EXIT");
+              " " + worker_type + " Exit");
 
     close_shared_counter();
 
