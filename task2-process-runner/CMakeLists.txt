@@ -30,3 +30,6 @@ target_link_libraries(process_test PRIVATE
 add_executable(child
     tests/child.cpp
 )
+
+# cmake -S . -B build -G "MinGW Makefiles"
+# cmake --build build
